@@ -16,20 +16,20 @@ if(mode==="upload"){if(!await authorized())return response({error:"권한이 없
 await ensureSchema();
 if(mode==="category"){
 if(!await authorized())return response({error:"관리자 권한이 필요합니다."},401);
-const b=await req.json(),name=String(b.name||"").trim();
+const b=await req.json(),name=String(b.name||"").trim();const parentId=b.parent_id?Number(b.parent_id):null,description=String(b.description||"").slice(0,500);if(parentId&&(!Number.isSafeInteger(parentId)||parentId===Number(b.id)))return response({error:"상위 카테고리를 확인해주세요."},400);
 if(!name||name.length>60||["전체","인기 상품"].includes(name))return response({error:"카테고리명을 확인해주세요."},400);
 try{
 if(b.id){
 const old=await db().query("SELECT name FROM shop_categories WHERE id=$1",[b.id]);
 if(!old.rowCount)return response({error:"카테고리를 찾을 수 없습니다."},404);
-await db().query("UPDATE shop_categories SET name=$1,sort_order=$2,visible=$3 WHERE id=$4",[name,Math.trunc(Number(b.sort_order)||0),b.visible!==false,b.id]);
+await db().query("UPDATE shop_categories SET name=$1,sort_order=$2,visible=$3,parent_id=$5,description=$6 WHERE id=$4",[name,Math.trunc(Number(b.sort_order)||0),b.visible!==false,b.id,parentId,description]);
 if(old.rows[0].name!==name){
 await db().query("UPDATE products SET category=$1 WHERE category=$2",[name,old.rows[0].name]);
 await db().query("UPDATE shop_blocks SET category=$1 WHERE category=$2",[name,old.rows[0].name]);
 }
 return response({ok:true});
 }
-await db().query("INSERT INTO shop_categories(name,sort_order,visible) VALUES($1,$2,$3)",[name,Math.trunc(Number(b.sort_order)||0),b.visible!==false]);
+await db().query("INSERT INTO shop_categories(name,sort_order,visible,parent_id,description) VALUES($1,$2,$3,$4,$5)",[name,Math.trunc(Number(b.sort_order)||0),b.visible!==false,parentId,description]);
 return response({ok:true});
 }catch(e){if(e.code==="23505")return response({error:"같은 이름이 이미 존재합니다."},409);throw e}
 }
