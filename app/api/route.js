@@ -51,4 +51,15 @@ if(mode==="payment-link"){if(!await authorized())return response({error:"권한�
 if(mode==="payment-link-sent"){if(!await authorized())return response({error:"권한이 없습니다."},401);const b=await req.json();const id=Number(b.id);if(!Number.isSafeInteger(id)||id<1)return response({error:"주문 번호 오류"},400);const q=await db().query("UPDATE orders SET payment_link_sent_at=now(),status='결제안내' WHERE id=$1 AND payment_link <> '' RETURNING id",[id]);if(!q.rowCount)return response({error:"저장된 결제 링크가 없습니다."},400);return response({ok:true})}
 if(mode==="order-status"){if(!await authorized())return response({error:"권한이 없습니다."},401);const b=await req.json();if(!["접수","확인","결제안내","입금확인","배송중","완료","취소"].includes(b.status))return response({error:"상태 오류"},400);await db().query("UPDATE orders SET status=$1 WHERE id=$2",[b.status,b.id]);return response({ok:true})}
 return response({error:"잘못된 요청"},400)}catch(e){console.error(e);return response({error:"요청을 처리하지 못했습니다."},503)}}
-export async function DELETE(req){if(!await authorized())return response({error:"권한이 없습니다."},401);try{await ensureSchema();const id=Number(new URL(req.url).searchParams.get("id"));if(!Number.isSafeInteger(id))return response({error:"상품 번호 오류"},400);await db().query("DELETE FROM products WHERE id=$1",[id]);return response({ok:true})}catch(e){return response({error:"삭제하지 못했습니다."},503)}}
+export async function DELETE(req){if(!await authorized())return response({error:"권한이 없습니다."},401);try{await ensureSchema();const params=new URL(req.url).searchParams;const type=params.get("type");const id=Number(params.get("id"));if(!Number.isSafeInteger(id))return response({error:"상품 번호 오류"},400);if(type==="category"){
+const f=await db().query("SELECT name FROM shop_categories WHERE id=$1",[id]);
+if(!f.rowCount)return response({error:"카테고리가 없습니다."},404);
+const name=f.rows[0].name;
+const q=await db().query("SELECT COUNT(*)::int AS count FROM products WHERE category=$1",[name]);
+if(q.rows[0].count>0)return response({error:"상품이 등록된 카테고리입니다. 상품 분류를 먼저 변경해주세요."},409);
+await db().query("DELETE FROM shop_categories WHERE id=$1",[id]);
+await db().query("UPDATE shop_blocks SET category='' WHERE category=$1",[name]);
+return response({ok:true});
+}
+if(type==="block"){await db().query("DELETE FROM shop_blocks WHERE id=$1",[id]);return response({ok:true})}
+await db().query("DELETE FROM products WHERE id=$1",[id]);return response({ok:true})}catch(e){return response({error:"삭제하지 못했습니다."},503)}}
